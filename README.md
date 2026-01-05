@@ -1,1 +1,1 @@
-# github-trending-tracker
+定时采集Github Trending数据
