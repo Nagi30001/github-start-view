@@ -17,6 +17,10 @@ declare module "next-auth" {
   }
 }
 
+export type SortField = "stars" | "updated_at"
+export type SortOrder = "asc" | "desc"
+export type ViewMode = "grid3" | "grid5" | "list"
+
 export interface Repository {
   id: number
   name: string

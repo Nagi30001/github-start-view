@@ -10,6 +10,7 @@ import {
   Clock,
 } from "lucide-react"
 import { githubService } from "@/lib/github"
+import { useMemo } from "react"
 
 type ViewMode = "grid3" | "grid5" | "list"
 
@@ -22,17 +23,23 @@ export default function RepositoryCard({
   repository,
   viewMode = "grid3",
 }: RepositoryCardProps) {
-  const languageColor = githubService.getRepoLanguageColor(
-    repository.language || ""
+  // 使用 useMemo 缓存计算结果
+  const languageColor = useMemo(
+    () => githubService.getRepoLanguageColor(repository.language || ""),
+    [repository.language]
   )
-  const updatedAt = githubService.formatUpdatedAt(repository.updated_at)
+
+  const updatedAt = useMemo(
+    () => githubService.formatUpdatedAt(repository.updated_at),
+    [repository.updated_at]
+  )
 
   // 紧凑视图（5列模式）
   if (viewMode === "grid5") {
     return (
-      <Card className="hover:shadow-lg transition-shadow duration-200 p-3">
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
+      <Card className="hover:shadow-lg transition-shadow duration-200 p-3 flex flex-col h-full">
+        <div className="flex flex-col flex-1 min-h-0">
+          <div className="flex items-center gap-2 mb-2">
             <Avatar className="w-6 h-6 flex-shrink-0">
               <AvatarImage
                 src={repository.owner.avatar_url}
@@ -56,31 +63,31 @@ export default function RepositoryCard({
           </div>
 
           {repository.description && (
-            <p className="text-xs text-gray-600 line-clamp-2">
+            <p className="text-xs text-gray-600 line-clamp-2 mb-2 flex-1">
               {repository.description}
             </p>
           )}
+        </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            {repository.language && (
-              <div className="flex items-center gap-1">
-                <div
-                  className="w-2 h-2 rounded-full"
-                  style={{ backgroundColor: languageColor }}
-                />
-                <span className="text-gray-700">{repository.language}</span>
-              </div>
-            )}
-
-            <div className="flex items-center gap-1 text-gray-600">
-              <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-              <span>{repository.stargazers_count}</span>
+        <div className="flex flex-wrap items-center gap-2 text-xs mt-auto">
+          {repository.language && (
+            <div className="flex items-center gap-1">
+              <div
+                className="w-2 h-2 rounded-full"
+                style={{ backgroundColor: languageColor }}
+              />
+              <span className="text-gray-700">{repository.language}</span>
             </div>
+          )}
 
-            <div className="flex items-center gap-1 text-gray-600">
-              <GitFork className="w-3 h-3" />
-              <span>{repository.forks_count}</span>
-            </div>
+          <div className="flex items-center gap-1 text-gray-600">
+            <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+            <span>{repository.stargazers_count}</span>
+          </div>
+
+          <div className="flex items-center gap-1 text-gray-600">
+            <GitFork className="w-3 h-3" />
+            <span>{repository.forks_count}</span>
           </div>
         </div>
       </Card>
@@ -156,9 +163,9 @@ export default function RepositoryCard({
 
   // 默认网格视图（3列模式）
   return (
-    <Card className="hover:shadow-lg transition-shadow duration-200">
-      <CardHeader className="pb-3">
-        <div className="flex items-start gap-3 flex-1 min-w-0">
+    <Card className="hover:shadow-lg transition-shadow duration-200 flex flex-col h-full">
+      <CardHeader className="pb-3 flex-1">
+        <div className="flex items-start gap-3 min-h-0">
           <Avatar className="w-10 h-10 flex-shrink-0">
             <AvatarImage
               src={repository.owner.avatar_url}
@@ -189,7 +196,7 @@ export default function RepositoryCard({
         </div>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="mt-auto">
         <div className="flex flex-wrap items-center gap-4 text-sm">
           {repository.language && (
             <div className="flex items-center gap-1.5">

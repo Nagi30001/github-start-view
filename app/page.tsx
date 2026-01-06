@@ -2,24 +2,20 @@
 
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
-import { useEffect, useState } from "react"
-import { Repository } from "@/types"
+import { useEffect, useState, useMemo, useCallback } from "react"
+import { Repository, ViewMode, SortField, SortOrder } from "@/types"
 import Header from "@/components/layout/Header"
 import RepositorySearch from "@/components/repository/RepositorySearch"
 import RepositoryList from "@/components/repository/RepositoryList"
+import SortButton from "@/components/repository/SortButton"
 import { AlertCircle, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { githubService } from "@/lib/github"
-
-type ViewMode = "grid3" | "grid5" | "list"
-type SortField = "stars" | "starred_at" | "updated_at"
-type SortOrder = "asc" | "desc"
 
 export default function Home() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [allRepositories, setAllRepositories] = useState<Repository[]>([])
-  const [filteredRepositories, setFilteredRepositories] = useState<Repository[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [searchInput, setSearchInput] = useState("")
@@ -29,7 +25,7 @@ export default function Home() {
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc")
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
 
-  const fetchStars = async () => {
+  const fetchStars = useCallback(async () => {
     if (!session?.accessToken) return
 
     try {
@@ -44,7 +40,6 @@ export default function Home() {
 
       const data = await response.json()
       setAllRepositories(data.stars || [])
-      setFilteredRepositories(data.stars || [])
       setHasLoadedOnce(true)
     } catch (err) {
       console.error("Error fetching stars:", err)
@@ -52,17 +47,17 @@ export default function Home() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [session?.accessToken])
 
   useEffect(() => {
     // 只在认证成功后加载一次
     if (status === "authenticated" && session?.accessToken && !hasLoadedOnce) {
       fetchStars()
     }
-  }, [status, session, hasLoadedOnce])
+  }, [status, session, hasLoadedOnce, fetchStars])
 
-  // 排序和过滤逻辑
-  useEffect(() => {
+  // 使用 useMemo 优化排序和过滤逻辑
+  const filteredRepositories = useMemo(() => {
     let sorted = [...allRepositories]
 
     // 排序
@@ -71,12 +66,6 @@ export default function Home() {
       switch (sortField) {
         case "stars":
           comparison = a.stargazers_count - b.stargazers_count
-          break
-        case "starred_at":
-          // 使用 starred_at 字段（如果存在），否则使用 updated_at
-          const aStarredAt = a.starred_at || a.updated_at
-          const bStarredAt = b.starred_at || b.updated_at
-          comparison = new Date(aStarredAt).getTime() - new Date(bStarredAt).getTime()
           break
         case "updated_at":
           // 使用 pushed_at（如果存在），否则使用 updated_at
@@ -93,7 +82,7 @@ export default function Home() {
       sorted = githubService.searchLocalStars(sorted, searchQuery)
     }
 
-    setFilteredRepositories(sorted)
+    return sorted
   }, [allRepositories, sortField, sortOrder, searchQuery])
 
   const handleSort = (field: SortField) => {
@@ -169,42 +158,20 @@ export default function Home() {
             <div className="flex gap-2 items-center">
               {/* 排序按钮组 */}
               <div className="flex gap-1 border-r pr-2 mr-2">
-                <Button
-                  variant={sortField === "stars" ? "default" : "outline"}
-                  size="sm"
+                <SortButton
+                  field="stars"
+                  label="星标数"
+                  currentField={sortField}
+                  currentOrder={sortOrder}
                   onClick={() => handleSort("stars")}
-                >
-                  星标数
-                  {sortField === "stars" && (
-                    <span className="ml-1 text-xs">
-                      {sortOrder === "asc" ? "↑" : "↓"}
-                    </span>
-                  )}
-                </Button>
-                <Button
-                  variant={sortField === "starred_at" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => handleSort("starred_at")}
-                >
-                  星标时间
-                  {sortField === "starred_at" && (
-                    <span className="ml-1 text-xs">
-                      {sortOrder === "asc" ? "↑" : "↓"}
-                    </span>
-                  )}
-                </Button>
-                <Button
-                  variant={sortField === "updated_at" ? "default" : "outline"}
-                  size="sm"
+                />
+                <SortButton
+                  field="updated_at"
+                  label="更新时间"
+                  currentField={sortField}
+                  currentOrder={sortOrder}
                   onClick={() => handleSort("updated_at")}
-                >
-                  更新时间
-                  {sortField === "updated_at" && (
-                    <span className="ml-1 text-xs">
-                      {sortOrder === "asc" ? "↑" : "↓"}
-                    </span>
-                  )}
-                </Button>
+                />
               </div>
 
               {/* 刷新按钮 */}
