@@ -33,6 +33,8 @@ export interface Repository {
   html_url: string
   topics: string[]
   size: number
+  starred_at?: string // 用户 star 这个仓库的时间
+  pushed_at?: string // 仓库最后推送时间
 }
 
 export interface SearchQuery {

@@ -35,7 +35,22 @@ export class GitHubService {
       }
 
       const data = await response.json()
-      allStars = [...allStars, ...data]
+
+      // GitHub API 返回的数据格式检查
+      // 对于 starred 仓库，API 返回的 data 包含仓库信息和 starred_at 时间
+      const processedData = data.map((item: any) => {
+        // 确保我们使用正确的 updated_at 字段
+        // item.repo 是完整的仓库信息，item.starred_at 是我们 star 的时间
+        const repo = item.repo || item
+        return {
+          ...repo,
+          starred_at: item.starred_at || repo.pushed_at || repo.updated_at,
+          // 优先使用 pushed_at（最后推送时间），其次是 updated_at
+          updated_at: repo.pushed_at || repo.updated_at
+        }
+      })
+
+      allStars = [...allStars, ...processedData]
 
       // 如果返回的数据少于 perPage，说明已经到最后一页
       hasMore = data.length === perPage

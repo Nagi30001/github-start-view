@@ -7,22 +7,27 @@ import { Repository } from "@/types"
 import Header from "@/components/layout/Header"
 import RepositorySearch from "@/components/repository/RepositorySearch"
 import RepositoryList from "@/components/repository/RepositoryList"
-import { AlertCircle } from "lucide-react"
+import { AlertCircle, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { githubService } from "@/lib/github"
 
 type ViewMode = "grid3" | "grid5" | "list"
+type SortField = "stars" | "starred_at" | "updated_at"
+type SortOrder = "asc" | "desc"
 
 export default function Home() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [allRepositories, setAllRepositories] = useState<Repository[]>([])
   const [filteredRepositories, setFilteredRepositories] = useState<Repository[]>([])
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [searchInput, setSearchInput] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>("grid3")
+  const [sortField, setSortField] = useState<SortField>("updated_at")
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc")
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
 
   const fetchStars = async () => {
     if (!session?.accessToken) return
@@ -40,6 +45,7 @@ export default function Home() {
       const data = await response.json()
       setAllRepositories(data.stars || [])
       setFilteredRepositories(data.stars || [])
+      setHasLoadedOnce(true)
     } catch (err) {
       console.error("Error fetching stars:", err)
       setError("加载失败，请重试")
@@ -49,30 +55,81 @@ export default function Home() {
   }
 
   useEffect(() => {
-    if (status === "authenticated" && session?.accessToken) {
+    // 只在认证成功后加载一次
+    if (status === "authenticated" && session?.accessToken && !hasLoadedOnce) {
       fetchStars()
     }
-  }, [status, session])
+  }, [status, session, hasLoadedOnce])
+
+  // 排序和过滤逻辑
+  useEffect(() => {
+    let sorted = [...allRepositories]
+
+    // 排序
+    sorted.sort((a, b) => {
+      let comparison = 0
+      switch (sortField) {
+        case "stars":
+          comparison = a.stargazers_count - b.stargazers_count
+          break
+        case "starred_at":
+          // 使用 starred_at 字段（如果存在），否则使用 updated_at
+          const aStarredAt = a.starred_at || a.updated_at
+          const bStarredAt = b.starred_at || b.updated_at
+          comparison = new Date(aStarredAt).getTime() - new Date(bStarredAt).getTime()
+          break
+        case "updated_at":
+          // 使用 pushed_at（如果存在），否则使用 updated_at
+          const aUpdatedAt = a.pushed_at || a.updated_at
+          const bUpdatedAt = b.pushed_at || b.updated_at
+          comparison = new Date(aUpdatedAt).getTime() - new Date(bUpdatedAt).getTime()
+          break
+      }
+      return sortOrder === "asc" ? comparison : -comparison
+    })
+
+    // 搜索过滤
+    if (searchQuery) {
+      sorted = githubService.searchLocalStars(sorted, searchQuery)
+    }
+
+    setFilteredRepositories(sorted)
+  }, [allRepositories, sortField, sortOrder, searchQuery])
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      // 切换排序顺序
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc")
+    } else {
+      // 切换到新字段，默认降序
+      setSortField(field)
+      setSortOrder("desc")
+    }
+  }
+
+  const handleRefresh = () => {
+    fetchStars()
+  }
 
   const handleSearch = () => {
     const query = searchInput.trim()
     setSearchQuery(query)
-
-    if (!query) {
-      setFilteredRepositories(allRepositories)
-    } else {
-      const filtered = githubService.searchLocalStars(allRepositories, query)
-      setFilteredRepositories(filtered)
-    }
-  }
-
-  const handleRetry = () => {
-    fetchStars()
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       handleSearch()
+    }
+  }
+
+  const getSortLabel = (field: SortField): string => {
+    switch (field) {
+      case "stars":
+        return "星标数"
+      case "starred_at":
+        return "星标时间"
+      case "updated_at":
+        return "更新时间"
     }
   }
 
@@ -108,8 +165,61 @@ export default function Home() {
               </p>
             </div>
 
-            {/* 视图模式切换 */}
-            <div className="flex gap-2">
+            {/* 排序和视图模式切换 */}
+            <div className="flex gap-2 items-center">
+              {/* 排序按钮组 */}
+              <div className="flex gap-1 border-r pr-2 mr-2">
+                <Button
+                  variant={sortField === "stars" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handleSort("stars")}
+                >
+                  星标数
+                  {sortField === "stars" && (
+                    <span className="ml-1 text-xs">
+                      {sortOrder === "asc" ? "↑" : "↓"}
+                    </span>
+                  )}
+                </Button>
+                <Button
+                  variant={sortField === "starred_at" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handleSort("starred_at")}
+                >
+                  星标时间
+                  {sortField === "starred_at" && (
+                    <span className="ml-1 text-xs">
+                      {sortOrder === "asc" ? "↑" : "↓"}
+                    </span>
+                  )}
+                </Button>
+                <Button
+                  variant={sortField === "updated_at" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handleSort("updated_at")}
+                >
+                  更新时间
+                  {sortField === "updated_at" && (
+                    <span className="ml-1 text-xs">
+                      {sortOrder === "asc" ? "↑" : "↓"}
+                    </span>
+                  )}
+                </Button>
+              </div>
+
+              {/* 刷新按钮 */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={loading}
+                className="mr-2"
+              >
+                <RefreshCw className={`w-4 h-4 mr-1 ${loading ? "animate-spin" : ""}`} />
+                刷新
+              </Button>
+
+              {/* 视图模式切换 */}
               <Button
                 variant={viewMode === "grid3" ? "default" : "outline"}
                 size="sm"
@@ -154,7 +264,7 @@ export default function Home() {
             <Button
               variant="outline"
               size="sm"
-              onClick={handleRetry}
+              onClick={handleRefresh}
               disabled={loading}
             >
               重试
@@ -168,11 +278,23 @@ export default function Home() {
           </div>
         )}
 
-        <RepositoryList
-          repositories={filteredRepositories}
-          loading={loading}
-          viewMode={viewMode}
-        />
+        {/* 首次加载显示全屏加载动画 */}
+        {loading && !hasLoadedOnce && (
+          <div className="flex flex-col items-center justify-center py-16">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-gray-900 mb-4" />
+            <p className="text-gray-600 text-lg">正在加载您的星标仓库...</p>
+            <p className="text-gray-400 text-sm mt-2">这可能需要几秒钟</p>
+          </div>
+        )}
+
+        {/* 非首次加载或加载完成显示列表 */}
+        {(!loading || hasLoadedOnce) && (
+          <RepositoryList
+            repositories={filteredRepositories}
+            loading={loading && hasLoadedOnce}
+            viewMode={viewMode}
+          />
+        )}
       </div>
     </main>
   )
