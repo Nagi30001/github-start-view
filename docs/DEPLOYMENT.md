@@ -2,6 +2,11 @@
 
 本文档详细说明如何将 GitHub Stars View 应用部署到 Vercel。
 
+## ⚠️ 重要提示
+
+**不要在 `vercel.json` 中配置环境变量引用！**
+请在 Vercel Dashboard 中手动配置所有环境变量。
+
 ## 前置要求
 
 - GitHub 账户
