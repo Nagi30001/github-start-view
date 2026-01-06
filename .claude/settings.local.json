@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Edit",
+      "Bash(mkdir:*)",
+      "Bash(git:*)",
+      "Read(/Users/nagi/Project/Study/Project/github-start-view/app/api/auth/[...nextauth]/route.ts)"
+    ]
+  }
+}
