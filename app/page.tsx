@@ -115,8 +115,6 @@ export default function Home() {
     switch (field) {
       case "stars":
         return "星标数"
-      case "starred_at":
-        return "星标时间"
       case "updated_at":
         return "更新时间"
     }
