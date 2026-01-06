@@ -14,21 +14,35 @@ export class GitHubService {
   async getStars(
     accessToken: string,
     page: number = 1,
-    perPage: number = 30
+    perPage: number = 100
   ): Promise<Repository[]> {
-    const response = await fetch(
-      `https://api.github.com/user/starred?page=${page}&per_page=${perPage}`,
-      {
-        headers: this.getHeaders(accessToken),
-        next: { revalidate: 60 } // Cache for 60 seconds
-      }
-    )
+    // 获取所有 star 的仓库（不分页，获取全部）
+    let allStars: Repository[] = []
+    let currentPage = 1
+    let hasMore = true
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch stars: ${response.statusText}`)
+    while (hasMore) {
+      const response = await fetch(
+        `https://api.github.com/user/starred?page=${currentPage}&per_page=${perPage}`,
+        {
+          headers: this.getHeaders(accessToken),
+          next: { revalidate: 60 } // Cache for 60 seconds
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch stars: ${response.statusText}`)
+      }
+
+      const data = await response.json()
+      allStars = [...allStars, ...data]
+
+      // 如果返回的数据少于 perPage，说明已经到最后一页
+      hasMore = data.length === perPage
+      currentPage++
     }
 
-    return response.json()
+    return allStars
   }
 
   async unstarRepo(
@@ -49,24 +63,19 @@ export class GitHubService {
     }
   }
 
-  async searchStars(
-    accessToken: string,
-    query: string,
-    page: number = 1
-  ): Promise<Repository[]> {
-    // 获取所有 stars（GitHub API 不支持直接搜索用户 starred 的仓库）
-    const allStars = await this.getStars(accessToken, 1, 100)
-
+  // 本地搜索功能 - 在前端使用，不需要调用 API
+  searchLocalStars(stars: Repository[], query: string): Repository[] {
     if (!query) {
-      return allStars
+      return stars
     }
 
     const lowerQuery = query.toLowerCase()
-    return allStars.filter(
+    return stars.filter(
       (repo) =>
         repo.name.toLowerCase().includes(lowerQuery) ||
         (repo.description && repo.description.toLowerCase().includes(lowerQuery)) ||
-        repo.language?.toLowerCase().includes(lowerQuery)
+        repo.language?.toLowerCase().includes(lowerQuery) ||
+        repo.full_name.toLowerCase().includes(lowerQuery)
     )
   }
 

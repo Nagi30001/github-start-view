@@ -7,52 +7,39 @@ import { Repository } from "@/types"
 import Header from "@/components/layout/Header"
 import RepositorySearch from "@/components/repository/RepositorySearch"
 import RepositoryList from "@/components/repository/RepositoryList"
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-  PaginationNext,
-  PaginationPrevious,
-} from "@/components/ui/pagination"
-import { AlertCircle, ChevronLeft, ChevronRight } from "lucide-react"
+import { AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { githubService } from "@/lib/github"
+
+type ViewMode = "grid3" | "grid5" | "list"
 
 export default function Home() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const [repositories, setRepositories] = useState<Repository[]>([])
+  const [allRepositories, setAllRepositories] = useState<Repository[]>([])
+  const [filteredRepositories, setFilteredRepositories] = useState<Repository[]>([])
   const [loading, setLoading] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [searchInput, setSearchInput] = useState("")
   const [error, setError] = useState<string | null>(null)
-  const [page, setPage] = useState(1)
-  const [totalPages, setTotalPages] = useState(1)
-  const itemsPerPage = 30
+  const [viewMode, setViewMode] = useState<ViewMode>("grid3")
 
-  const fetchStars = async (query = "", pageNum = 1) => {
+  const fetchStars = async () => {
     if (!session?.accessToken) return
 
     try {
       setLoading(true)
       setError(null)
 
-      const params = new URLSearchParams({
-        page: pageNum.toString(),
-        ...(query && { q: query }),
-      })
-
-      const response = await fetch(`/api/stars?${params.toString()}`)
+      const response = await fetch("/api/stars")
 
       if (!response.ok) {
         throw new Error("Failed to fetch stars")
       }
 
       const data = await response.json()
-      setRepositories(data.stars || [])
-      // 简单计算总页数（实际应该从 API 返回）
-      const totalCount = data.stars?.length || 0
-      setTotalPages(Math.ceil(totalCount / itemsPerPage) || 1)
+      setAllRepositories(data.stars || [])
+      setFilteredRepositories(data.stars || [])
     } catch (err) {
       console.error("Error fetching stars:", err)
       setError("加载失败，请重试")
@@ -63,23 +50,30 @@ export default function Home() {
 
   useEffect(() => {
     if (status === "authenticated" && session?.accessToken) {
-      fetchStars(searchQuery, page)
+      fetchStars()
     }
-  }, [status, session, page, searchQuery])
+  }, [status, session])
 
-  const handleSearch = (query: string) => {
+  const handleSearch = () => {
+    const query = searchInput.trim()
     setSearchQuery(query)
-    setPage(1)
-    fetchStars(query, 1)
-  }
 
-  const handleUnstar = () => {
-    // 重新获取数据
-    fetchStars(searchQuery, page)
+    if (!query) {
+      setFilteredRepositories(allRepositories)
+    } else {
+      const filtered = githubService.searchLocalStars(allRepositories, query)
+      setFilteredRepositories(filtered)
+    }
   }
 
   const handleRetry = () => {
-    fetchStars(searchQuery, page)
+    fetchStars()
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      handleSearch()
+    }
   }
 
   if (status === "loading") {
@@ -104,18 +98,49 @@ export default function Home() {
 
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h2 className="text-2xl font-bold mb-2">
-            我的 Star 收藏
-          </h2>
-          <p className="text-gray-600">
-            管理您在 GitHub 上收藏的所有项目
-          </p>
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h2 className="text-2xl font-bold mb-2">
+                我的 Star 收藏
+              </h2>
+              <p className="text-gray-600">
+                共 {allRepositories.length} 个项目
+              </p>
+            </div>
+
+            {/* 视图模式切换 */}
+            <div className="flex gap-2">
+              <Button
+                variant={viewMode === "grid3" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("grid3")}
+              >
+                3列
+              </Button>
+              <Button
+                variant={viewMode === "grid5" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("grid5")}
+              >
+                5列
+              </Button>
+              <Button
+                variant={viewMode === "list" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("list")}
+              >
+                列表
+              </Button>
+            </div>
+          </div>
         </div>
 
         <div className="mb-6 max-w-2xl">
           <RepositorySearch
-            value={searchQuery}
-            onChange={handleSearch}
+            value={searchInput}
+            onChange={setSearchInput}
+            onSearch={handleSearch}
+            onKeyPress={handleKeyPress}
             disabled={loading}
           />
         </div>
@@ -137,63 +162,17 @@ export default function Home() {
           </div>
         )}
 
-        {searchQuery && repositories.length > 0 && (
+        {searchQuery && (
           <div className="mb-4 text-sm text-gray-600">
-            找到 <span className="font-semibold">{repositories.length}</span> 个匹配的仓库
+            找到 <span className="font-semibold">{filteredRepositories.length}</span> 个匹配的仓库
           </div>
         )}
 
         <RepositoryList
-          repositories={repositories}
+          repositories={filteredRepositories}
           loading={loading}
-          onUnstar={handleUnstar}
+          viewMode={viewMode}
         />
-
-        {totalPages > 1 && !searchQuery && (
-          <div className="flex justify-center mt-8">
-            <Pagination>
-              <PaginationContent>
-                {page > 1 && (
-                  <PaginationItem>
-                    <PaginationPrevious
-                      onClick={() => setPage(page - 1)}
-                      className={loading ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                    />
-                  </PaginationItem>
-                )}
-
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                  (pageNum) => (
-                    <PaginationItem key={pageNum}>
-                      <PaginationLink
-                        onClick={() => setPage(pageNum)}
-                        isActive={page === pageNum}
-                        className={
-                          loading
-                            ? "pointer-events-none opacity-50"
-                            : page === pageNum
-                            ? ""
-                            : "cursor-pointer hover:underline"
-                        }
-                      >
-                        {pageNum}
-                      </PaginationLink>
-                    </PaginationItem>
-                  )
-                )}
-
-                {page < totalPages && (
-                  <PaginationItem>
-                    <PaginationNext
-                      onClick={() => setPage(page + 1)}
-                      className={loading ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                    />
-                  </PaginationItem>
-                )}
-              </PaginationContent>
-            </Pagination>
-          </div>
-        )}
       </div>
     </main>
   )

@@ -10,16 +10,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const searchParams = request.nextUrl.searchParams
-    const page = parseInt(searchParams.get("page") || "1", 10)
-    const query = searchParams.get("q") || ""
-
-    let stars
-    if (query) {
-      stars = await githubService.searchStars(session.accessToken, query, page)
-    } else {
-      stars = await githubService.getStars(session.accessToken, page)
-    }
+    // 获取所有 star 数据（不分页）
+    const stars = await githubService.getStars(session.accessToken)
 
     return NextResponse.json({ stars })
   } catch (error) {
